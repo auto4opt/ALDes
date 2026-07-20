@@ -19,7 +19,7 @@ authors = [
   { name = "Yuhui Shi" },
 ]
 dependencies = [
-  "autooptlib[aldes] @ git+https://github.com/auto4opt/AutoOptLib.git@v1.3.0",
+  "autooptlib[aldes]>=1.3,<2",
   "numpy>=1.23,<3",
   "scipy>=1.9,<2",
 ]
