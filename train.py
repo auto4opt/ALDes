@@ -1,27 +1,48 @@
-import os
+import argparse
 import time
+from pathlib import Path
+
+import torch
+from torch import nn
 from torch.optim import Adam
 
-from data import *
+from aldes_setting import begin_index, total_index
+from conf import (
+    adam_eps,
+    aldes_mode,
+    batch_size_src,
+    clip,
+    continual_problem_sets,
+    d_model,
+    device,
+    drop_prob,
+    ewc_weight,
+    ffn_hidden,
+    init_lr,
+    max_len,
+    n_heads,
+    n_layers,
+    ppo_epoch,
+    total_epoch,
+    use_ewc,
+    weight_decay,
+)
+from EWC import EWC
 from models.model.transformer import Transformer
-from util.bleu import idx_to_word, get_bleu
 
-import matlab.engine
-import matlab
-from matlab_setting import *
-from EWC import *
-from pflacco_feature import cal_feature, transform
-from util.my_util import *
+from autooptlib.aldes import evaluate_pbo_actions
+from pflacco_feature import (
+    load_initial_populations,
+    load_standardized_features,
+)
+from util.device import describe_device
+from util.my_util import RunLogger, seed_torch
 
-useEWC = False
 EWC_ = None
+current_initial_populations = None
+evaluation_round = 0
 
-eng = matlab.engine.start_matlab()
-# matlab root dir
-work_path = os.getcwd() + "\\matlab"
-eng.cd(work_path)
-
-logs = my_log()
+logs = RunLogger()
 
 
 def count_parameters(model):
@@ -29,96 +50,106 @@ def count_parameters(model):
 
 
 def initialize_weights(m):
-    if hasattr(m, 'weight') and m.weight.dim() > 1:
-        nn.init.kaiming_uniform(m.weight.data)
+    if hasattr(m, "weight") and m.weight is not None and m.weight.dim() > 1:
+        nn.init.kaiming_uniform_(m.weight.data)
 
 
-def get_model():
-    if model_type == 0:
-        model = Transformer(src_pad_idx=src_pad_idx,
-                            trg_pad_idx=trg_pad_idx,
-                            trg_sos_idx=trg_sos_idx,
-                            d_model=d_model,
-                            enc_voc_size=total_index,  # enc_voc_size,
-                            dec_voc_size=total_index,  # voc_size,
-                            max_len=max_len,
-                            ffn_hidden=ffn_hidden,
-                            n_head=n_heads,
-                            n_layers=n_layers,
-                            drop_prob=drop_prob,
-                            device=device).to(device)
+def get_model(mode=None):
+    mode = aldes_mode if mode is None else str(mode).lower()
+    if mode not in {"single", "continual"}:
+        raise ValueError("ALDes mode must be 'single' or 'continual'.")
+    model = Transformer(
+        d_model=d_model,
+        dec_voc_size=total_index,
+        max_len=max_len,
+        ffn_hidden=ffn_hidden,
+        n_head=n_heads,
+        n_layers=n_layers,
+        drop_prob=drop_prob,
+        device=device,
+        condition_on_features=(mode == "continual"),
+    ).to(device)
 
-        print(f'The model has {count_parameters(model):,} trainable parameters')
-        model.apply(initialize_weights)
-        optimizer = Adam(params=model.parameters(),
-                         lr=init_lr,
-                         weight_decay=weight_decay,
-                         eps=adam_eps)
-    else:
-        pass
+    print(
+        f"The model has {count_parameters(model):,} trainable parameters "
+        f"on {describe_device(device)}"
+    )
+    model.apply(initialize_weights)
+    optimizer = Adam(
+        params=model.parameters(),
+        lr=init_lr,
+        weight_decay=weight_decay,
+        eps=adam_eps,
+    )
     return model, optimizer
 
 
 def get_performance(action, problem_id, eval=0):
-    # call matlab funtion get performance
-    mean_performances = []
-    performances = []
+    """Evaluate generated actions with the Python AutoOptLib backend."""
+    global evaluation_round
+    evaluation_seed = None
+    if logs.seed >= 0:
+        evaluation_seed = int(logs.seed) * 1_000_000 + evaluation_round
+        evaluation_round += 1
+    mean_performances, performances = evaluate_pbo_actions(
+        action,
+        problem_id,
+        evaluate_test=bool(eval),
+        seed=evaluation_seed,
+        initial_populations=current_initial_populations,
+        workers=None,
+    )
     if eval == 1:
-        action = action[0:3]
-    for j in range(action.shape[0]):
-        # get performance and reward
-        alg_list = action[j, :].reshape(-1).tolist()
-
-        # delet first one "Begin"
-        alg_list.pop(0)
-        # delet "End"
-        while (alg_list[len(alg_list) - 1] == end_index):
-            alg_list.pop()  # delet last one
-        # print(alg_list)
-        alg = matlab.double(initializer=alg_list)
-        if eval == 0:
-            instances = matlab.double([1, 2, 3])
-        else:
-            instances = matlab.double([4])
-        performance = eng.get_perf(alg, problem_id, instances, eval, nargout=1)
-
-        if eval == 0:
-            performance = np.array(performance)
-            performance = performance[0:3]
-        else:
-            performance = np.array(performance)
-            performance = performance[0]
-        # performance = np.array(performance) #first row is instanceTrain , second is instanceTest, do not use Test
-        mean_performance = performance.mean()
-        mean_performances.append(mean_performance)
-        performances.append(performance)
-        if eval == 1:
-            logs.write_log("problem_" + (problem_id).__str__() + " result:\n" + str(performance))
-            logs.write_log("problem_" + (problem_id).__str__() + " result mean:\n" + str(mean_performance))
+        for mean_performance, performance in zip(mean_performances, performances):
+            logs.write_log(
+                "problem_" + str(problem_id) + " result:\n" + str(performance)
+            )
+            logs.write_log(
+                "problem_" + str(problem_id) + " result mean:\n" + str(mean_performance)
+            )
 
     return mean_performances, performances
 
 
-def PPO(model, optimizer, clip, total_epoch, ppo_epoch, baseline, clip_coef, src, trg, att_src, problem_id):
+def PPO(
+    model,
+    optimizer,
+    clip,
+    total_epoch,
+    ppo_epoch,
+    baseline,
+    clip_coef,
+    src,
+    trg,
+    att_src,
+    problem_id,
+):
     ewc_loss = None
     global EWC_
     action_total_list = []
     log_performances = []
     # ppo
     for i in range(total_epoch):
+        progress = i / max(1, total_epoch - 1)
+        learning_rate = init_lr * (1.0 - progress)
+        for group in optimizer.param_groups:
+            group["lr"] = learning_rate
         since = time.time()
+        model.eval()
         with torch.no_grad():
             action, action_p, action_log_p = model(src, trg, att_src)
             action_log_p = torch.squeeze(action_log_p, 2)
             logs.write_log("action in train: \n" + str(action[0:5]))
-            logs.write_log("action_p in train: \n " + str(torch.squeeze(action_p[0:5], 2)))
+            logs.write_log(
+                "action_p in train: \n " + str(torch.squeeze(action_p[0:5], 2))
+            )
             action_total_list += action.tolist()
 
         mean_performances, performances = get_performance(action, problem_id)
         log_performances.append(performances)
         logs.write_log("performances in train: \n " + str(performances[0:5]))
-        mean_performances = torch.tensor(mean_performances)
-        cost = mean_performances.to(device)
+        model_device = next(model.parameters()).device
+        cost = torch.as_tensor(mean_performances, device=model_device)
         if baseline is None:
             baseline = cost.mean()
         else:
@@ -127,19 +158,20 @@ def PPO(model, optimizer, clip, total_epoch, ppo_epoch, baseline, clip_coef, src
 
         # ppo update
         for j in range(ppo_epoch):
-
-            _, new_action_p, new_action_log_p = model(src, trg, att_src, action)
+            _, _, new_action_log_p = model(src, trg, att_src, action)
             new_action_log_p = torch.squeeze(new_action_log_p, 2)
             logratio = new_action_log_p.sum(1) - action_log_p.sum(1)
             ratio = logratio.exp()
 
             pg_loss1 = (cost - baseline) * ratio
-            pg_loss2 = (cost - baseline) * torch.clamp(ratio, 1 - clip_coef, 1 + clip_coef)
+            pg_loss2 = (cost - baseline) * torch.clamp(
+                ratio, 1 - clip_coef, 1 + clip_coef
+            )
             loss = torch.max(pg_loss1, pg_loss2).mean()
 
             if EWC_ is not None:
                 ewc_loss = EWC_.penalty(model)
-                loss += ewc_loss
+                loss += ewc_weight * ewc_loss
             optimizer.zero_grad()
             loss.backward()
 
@@ -147,225 +179,323 @@ def PPO(model, optimizer, clip, total_epoch, ppo_epoch, baseline, clip_coef, src
             optimizer.step()
 
         if ewc_loss is not None:
-            logs.write_log(('step :', round((i / total_epoch) * 100, 2),
-                            '% , ewc_loss :', ewc_loss.item()).__str__())
-            print('step :', round((i / total_epoch) * 100, 2),
-                  '% , ewc_loss :', ewc_loss.item())
+            logs.write_log(
+                (
+                    "step :",
+                    round((i / total_epoch) * 100, 2),
+                    "% , ewc_loss :",
+                    ewc_loss.item(),
+                ).__str__()
+            )
+            print(
+                "step :",
+                round((i / total_epoch) * 100, 2),
+                "% , ewc_loss :",
+                ewc_loss.item(),
+            )
 
         time_elapsed = time.time() - since
 
-        print('step :', round((i / total_epoch) * 100, 2),
-              '% , loss :', loss.item(),
-              ', cost_mean :', cost.mean().item(),
-              ', baseline :', baseline.item(),
-              ',Training complete in {:.0f}m {:.0f}s'.format(
-                  time_elapsed // 60, time_elapsed % 60)
-              )
-        logs.write_log(('step :', round((i / total_epoch) * 100, 2),
-                        '% , loss :', loss.item(),
-                        ', cost_mean :', cost.mean().item(),
-                        ', baseline :', baseline.item(),
-                        ',Training complete in {:.0f}m {:.0f}s'.format(
-                            time_elapsed // 60, time_elapsed % 60)
-                        ).__str__())
+        print(
+            "step :",
+            round((i / total_epoch) * 100, 2),
+            "% , loss :",
+            loss.item(),
+            ", cost_mean :",
+            cost.mean().item(),
+            ", baseline :",
+            baseline.item(),
+            ",Training complete in {:.0f}m {:.0f}s".format(
+                time_elapsed // 60, time_elapsed % 60
+            ),
+        )
+        logs.write_log(
+            (
+                "step :",
+                round((i / total_epoch) * 100, 2),
+                "% , loss :",
+                loss.item(),
+                ", cost_mean :",
+                cost.mean().item(),
+                ", baseline :",
+                baseline.item(),
+                ",Training complete in {:.0f}m {:.0f}s".format(
+                    time_elapsed // 60, time_elapsed % 60
+                ),
+            ).__str__()
+        )
 
     logs.dump_log(log_performances)
+    model.eval()
+    with torch.no_grad():
+        inferred_action, _, _ = model(src, trg, att_src, reference=True)
+    return inferred_action[:1]
 
-    return action
 
+def PPO_get_ewc(
+    model,
+    optimizer,
+    clip,
+    total_epoch,
+    ppo_epoch,
+    baseline,
+    clip_coef,
+    src,
+    trg,
+    att_src,
+    problem_id,
+):
+    del clip, total_epoch, ppo_epoch
+    model.eval()
+    with torch.no_grad():
+        action, _, action_log_p = model(src, trg, att_src)
+        action_log_p = torch.squeeze(action_log_p, 2)
 
-def PPO_get_ewc(model, optimizer, clip, total_epoch, ppo_epoch, baseline, clip_coef, src, trg, att_src, problem_id):
-    # ppo
-    for i in range(1):
-        since = time.time()
-        with torch.no_grad():
-            action, action_p, action_log_p = model(src, trg, att_src)
-            action_log_p = torch.squeeze(action_log_p, 2)
+    mean_performances, _ = get_performance(action, problem_id)
+    model_device = next(model.parameters()).device
+    cost = torch.as_tensor(mean_performances, device=model_device)
+    if baseline is None:
+        baseline = cost.mean()
+    else:
+        baseline = 0.8 * baseline + 0.2 * cost.mean()
+    baseline = baseline.detach()
 
-        mean_performances, performances = get_performance(action, problem_id)
-        mean_performances = torch.tensor(mean_performances)
-        cost = mean_performances.to(device)
-        if baseline is None:
-            baseline = cost.mean()
-        else:
-            baseline = 0.8 * baseline + 0.2 * cost.mean()
-        baseline = baseline.detach()
+    _, _, new_action_log_p = model(src, trg, att_src, action)
+    new_action_log_p = torch.squeeze(new_action_log_p, 2)
+    logratio = new_action_log_p.sum(1) - action_log_p.sum(1)
+    ratio = logratio.exp()
 
-        # ppo update
-        for j in range(1):
-            _, new_action_p, new_action_log_p = model(src, trg, att_src, action)
-            new_action_log_p = torch.squeeze(new_action_log_p, 2)
-            logratio = new_action_log_p.sum(1) - action_log_p.sum(1)
-            ratio = logratio.exp()
+    pg_loss1 = (cost - baseline) * ratio
+    pg_loss2 = (cost - baseline) * torch.clamp(ratio, 1 - clip_coef, 1 + clip_coef)
+    loss = torch.max(pg_loss1, pg_loss2).mean()
 
-            pg_loss1 = (cost - baseline) * ratio
-            pg_loss2 = (cost - baseline) * torch.clamp(ratio, 1 - clip_coef, 1 + clip_coef)
-            loss = torch.max(pg_loss1, pg_loss2).mean()
-
-            optimizer.zero_grad()
-            loss.backward()
-            EWC_.update_diag_fisher(model)
+    optimizer.zero_grad()
+    loss.backward()
+    EWC_.update_diag_fisher(model)
     return action
 
 
 def train(model, optimizer, clip, problem_id, src, trg, att_src):
-    model.train()
+    # PPO old/new policy likelihoods must use the same deterministic network
+    # mode; gradients still propagate while the module is in eval mode.
+    model.eval()
     baseline = None
     clip_coef = 0.2
-    if train_type == 0:
-        action = PPO(model, optimizer, clip, total_epoch, ppo_epoch, baseline, clip_coef, src, trg, att_src, problem_id)
-
-    return action
-
-
-def evaluate(model, iterator, criterion):
-    model.eval()
-    epoch_loss = 0
-    batch_bleu = []
-    with torch.no_grad():
-        for i, batch in enumerate(iterator):
-            src = batch.src
-            trg = batch.trg
-            output = model(src, trg[:, :-1])
-            output_reshape = output.contiguous().view(-1, output.shape[-1])
-            trg = trg[:, 1:].contiguous().view(-1)
-
-            loss = criterion(output_reshape, trg)
-            epoch_loss += loss.item()
-
-            total_bleu = []
-            for j in range(batch_size):
-                try:
-                    trg_words = idx_to_word(batch.trg[j], loader.target.vocab)
-                    output_words = output[j].max(dim=1)[1]
-                    output_words = idx_to_word(output_words, loader.target.vocab)
-                    bleu = get_bleu(hypotheses=output_words.split(), reference=trg_words.split())
-                    total_bleu.append(bleu)
-                except:
-                    pass
-
-            total_bleu = sum(total_bleu) / len(total_bleu)
-            batch_bleu.append(total_bleu)
-
-    batch_bleu = sum(batch_bleu) / len(batch_bleu)
-    return epoch_loss / len(iterator), batch_bleu
+    return PPO(
+        model,
+        optimizer,
+        clip,
+        total_epoch,
+        ppo_epoch,
+        baseline,
+        clip_coef,
+        src,
+        trg,
+        att_src,
+        problem_id,
+    )
 
 
-def train_separately():
+def train_separately(problem_ids=None, *, evaluate_test=False):
+    """Train independent policies for one or more PBO problems.
+
+    The default is intentionally one problem. Single-problem design returns
+    the inferred action directly and does not need a model checkpoint.
+    """
+
     print("Train separately")
     logs.write_log("Train separately")
-    problem_set = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]
-    problem_nums = 0
-    input_src = []
+    problem_set = [1] if problem_ids is None else [int(item) for item in problem_ids]
+    actions = {}
     for problem_id in problem_set:
         logs.problem_id = problem_id
         print("Train problem_" + problem_id.__str__())
         logs.write_log("Train problem_" + problem_id.__str__())
 
-        model, optimizer = get_model()
+        model, optimizer = get_model("single")
 
-        src = torch.randn(10, d_model).to(device)  # 512->30
+        src = None
         trg = torch.tensor([begin_index]).to(device)
         trg = trg.unsqueeze(dim=0)
         # train with batch
-        src = src.repeat(batch_size_src, 1, 1)
         trg = trg.repeat(batch_size_src, 1)
-        att_src = torch.range(0, 26, 1, dtype=torch.int).to(device)
+        att_src = torch.arange(0, 27, 1, dtype=torch.int).to(device)
         att_src = att_src.unsqueeze(dim=0)
         att_src = att_src.repeat(batch_size_src, 1)
 
-        input_src.append(src)
         logs.write_log("model input :\n" + str(src))
 
         action = train(model, optimizer, clip, problem_id, src, trg, att_src)
-
+        actions[problem_id] = action.detach().cpu()
         logs.write_log("train over action: \n" + str(action))
+        print(f"problem_{problem_id} inferred action: {action[0].tolist()}")
 
-        # get_performance(action,problem_id,eval=1)
+        if evaluate_test:
+            get_performance(action, problem_id, eval=1)
+    return actions
 
 
-def train_in_one():
+def train_in_one(problem_sequence=None, *, checkpoint_dir=None):
+    """Train one feature-conditioned policy across a problem sequence."""
+
     print("Train In One")
     logs.write_log("Train In One")
     input_src = {}
-    model, optimizer = get_model()
-    global EWC_
-    problem_set = [1, 2, 11, 18, 19, 22, 23]
-    problem_nums = 0
-    feature = transform()
-    for problem_id in problem_set:
-        src = torch.from_numpy(feature[problem_id - 1][0:d_model].reshape(1, d_model)).to(torch.float32).to(device)
-        src = src.repeat(batch_size_src, 1, 1)
-
-        input_src[problem_id] = src
-    for problem_id in problem_set:
+    model, optimizer = get_model("continual")
+    global EWC_, current_initial_populations
+    if problem_sequence is None:
+        problem_sequence = [
+            problem_id
+            for problem_set in continual_problem_sets
+            for problem_id in problem_set
+        ]
+    else:
+        problem_sequence = [int(problem_id) for problem_id in problem_sequence]
+    seen_problem_ids = []
+    for stage, problem_id in enumerate(problem_sequence, start=1):
+        active_problem_ids = list(dict.fromkeys(seen_problem_ids + [problem_id]))
+        feature = load_standardized_features(active_problem_ids)
+        for active_id, vector in feature.items():
+            src = torch.from_numpy(vector[:d_model].reshape(1, d_model))
+            src = src.to(torch.float32).to(device)
+            input_src[active_id] = src.repeat(batch_size_src, 1, 1)
         logs.problem_id = problem_id
-        problem_nums += 1
         print("Train problem_" + problem_id.__str__())
         logs.write_log("Train problem_" + problem_id.__str__())
+        current_initial_populations = load_initial_populations(problem_id)
 
         trg = torch.tensor([begin_index]).to(device)
         trg = trg.unsqueeze(dim=0)
         # train with batch
         trg = trg.repeat(batch_size_src, 1)
-        att_src = torch.range(0, 26, 1, dtype=torch.int).to(device)
+        att_src = torch.arange(0, 27, 1, dtype=torch.int).to(device)
         att_src = att_src.unsqueeze(dim=0)
         att_src = att_src.repeat(batch_size_src, 1)
 
-        action = train(model, optimizer, clip, problem_id, input_src[problem_id], trg, att_src)
-
-        # logs.write_log("train over action: \n"+str(action))
-        if useEWC is True:
+        action = train(
+            model, optimizer, clip, problem_id, input_src[problem_id], trg, att_src
+        )
+        logs.write_log("train over action: \n" + str(action))
+        if use_ewc is True:
             print("Cal EWC______________________")
             EWC_ = EWC(model)
-            for i in problem_set:
+            fisher_problem_ids = list(dict.fromkeys(seen_problem_ids + [problem_id]))
+            for i in fisher_problem_ids:
+                current_initial_populations = load_initial_populations(i)
                 temp_src = input_src[i]
-                PPO_get_ewc(model, optimizer, clip, total_epoch, ppo_epoch, None, 0.2, temp_src, trg, att_src, i)
-                if i == problem_id: break
+                PPO_get_ewc(
+                    model,
+                    optimizer,
+                    clip,
+                    total_epoch,
+                    ppo_epoch,
+                    None,
+                    0.2,
+                    temp_src,
+                    trg,
+                    att_src,
+                    i,
+                )
             for key in EWC_._precision_matrices:
-                EWC_._precision_matrices[key] = EWC_._precision_matrices[key] / (problem_nums)
+                EWC_._precision_matrices[key] = EWC_._precision_matrices[key] / len(
+                    fisher_problem_ids
+                )
+        seen_problem_ids.append(problem_id)
 
-        torch.save(model.state_dict(), 'logs/' + "train_in_one/" + problem_id.__str__() + '.pt')
+        if checkpoint_dir is not None:
+            output = Path(checkpoint_dir)
+            output.mkdir(parents=True, exist_ok=True)
+            torch.save(
+                model.state_dict(),
+                output / f"stage{stage}_problem{problem_id}.pt",
+            )
 
         logs.write_log("EWC TEST : train over problem : " + (problem_id).__str__())
         for key, value in input_src.items():
-            old_action, action_p, action_log_p = model(input_src[key], trg, att_src, reference=True)
+            current_initial_populations = load_initial_populations(key)
+            old_action, _, _ = model(input_src[key], trg, att_src, reference=True)
             logs.write_log("problem_" + key.__str__() + " action:\n" + str(old_action))
             get_performance(old_action[0:1], key, eval=1)
+    current_initial_populations = None
 
 
-def test():
-    model, optimizer = get_model()
-    model.load_state_dict(
-        torch.load(r'D:\01Code\transformer-rl-3\logs\Transformer_PPO\100_32\1_11_17_12_11\train_in_one.pt'))
-    input_src = []
-    problem_set = [2, 3, 4, 5, 6, 7, 8, 9, 10]
-    problem_nums = 0
-    for problem_id in problem_set:
-        src = torch.randn(30, d_model).to(device)  # 512->30
-        trg = torch.tensor([begin_index]).to(device)
-        trg = trg.unsqueeze(dim=0)
-        # train with batch
-        src = src.repeat(batch_size_src, 1, 1)
-        trg = trg.repeat(batch_size_src, 1)
+def _id_list(value):
+    """Parse a comma-separated list of positive integer IDs."""
 
-        att_src = torch.range(0, 26, 1, dtype=torch.int).to(device)
-        att_src = att_src.unsqueeze(dim=0)
-        att_src = att_src.repeat(batch_size_src, 1)
-        input_src.append(src)
-
-        with torch.no_grad():
-            action, action_p, action_log_p = model(src, trg, att_src)
-            action_log_p = torch.squeeze(action_log_p, 2)
-
-    mean_performances, performances = get_performance(action, problem_id)
-    mean_performances = torch.tensor(mean_performances)
+    try:
+        values = [int(item.strip()) for item in value.split(",") if item.strip()]
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            "IDs must be comma-separated integers."
+        ) from exc
+    if not values or any(item <= 0 for item in values):
+        raise argparse.ArgumentTypeError(
+            "At least one positive integer ID is required."
+        )
+    return values
 
 
-if __name__ == '__main__':
-    for seed in range(1, 6, 1):
+def _problem_list(value):
+    values = _id_list(value)
+    if any(item > 23 for item in values):
+        raise argparse.ArgumentTypeError("PBO problem IDs must be in 1..23.")
+    return values
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(description="Train the pure-Python ALDes policy.")
+    parser.add_argument(
+        "--mode",
+        choices=("single", "continual"),
+        default=aldes_mode,
+        help="single designs from scratch for each problem; continual reuses one policy",
+    )
+    parser.add_argument(
+        "--problems",
+        type=_problem_list,
+        default=None,
+        help="comma-separated PBO IDs (single-mode default: 1)",
+    )
+    parser.add_argument(
+        "--seeds",
+        type=_id_list,
+        default=[1],
+        help="comma-separated training seeds (default: 1)",
+    )
+    parser.add_argument(
+        "--evaluate-test",
+        action="store_true",
+        help="run the paper's 30-run test after single-problem training",
+    )
+    parser.add_argument(
+        "--checkpoint-dir",
+        type=Path,
+        default=None,
+        help="optional continual-mode state-dictionary output directory",
+    )
+    return parser
+
+
+def main(argv=None):
+    """Command-line entry point with a safe one-problem, one-seed default."""
+
+    args = build_parser().parse_args(argv)
+    if args.mode == "single" and args.checkpoint_dir is not None:
+        raise SystemExit("--checkpoint-dir is only available in continual mode.")
+
+    global EWC_, current_initial_populations, evaluation_round
+    for seed in args.seeds:
+        EWC_ = None
+        current_initial_populations = None
+        evaluation_round = 0
         logs.seed = seed
-        logs.write_log('seed is {}'.format(seed))
+        logs.write_log(f"seed is {seed}")
         seed_torch(seed)
-        #train_in_one()
-        train_separately()
+        if args.mode == "continual":
+            train_in_one(args.problems, checkpoint_dir=args.checkpoint_dir)
+        else:
+            train_separately(args.problems or [1], evaluate_test=args.evaluate_test)
+
+
+if __name__ == "__main__":
+    main()

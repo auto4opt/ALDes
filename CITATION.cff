@@ -1,0 +1,40 @@
+cff-version: 1.2.0
+message: "If you use ALDes, please cite the paper below."
+title: "ALDes: Automated Metaheuristic Algorithm Design with Autoregressive Learning"
+type: software
+version: 2.0.0
+date-released: 2026-07-20
+repository-code: "https://github.com/auto4opt/ALDes"
+license: Apache-2.0
+authors:
+  - family-names: Zhao
+    given-names: Qi
+  - family-names: Liu
+    given-names: Tengfei
+  - family-names: Yan
+    given-names: Bai
+  - family-names: Duan
+    given-names: Qiqi
+  - family-names: Yang
+    given-names: Jian
+  - family-names: Shi
+    given-names: Yuhui
+preferred-citation:
+  type: article
+  title: "Automated Metaheuristic Algorithm Design with Autoregressive Learning"
+  year: 2024
+  doi: "10.1109/TEVC.2024.3464677"
+  journal: "IEEE Transactions on Evolutionary Computation"
+  authors:
+    - family-names: Zhao
+      given-names: Qi
+    - family-names: Liu
+      given-names: Tengfei
+    - family-names: Yan
+      given-names: Bai
+    - family-names: Duan
+      given-names: Qiqi
+    - family-names: Yang
+      given-names: Jian
+    - family-names: Shi
+      given-names: Yuhui

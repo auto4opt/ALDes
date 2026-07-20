@@ -1,0 +1,71 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aldes"
+version = "2.0.0"
+description = "Pure-Python ALDes for automated metaheuristic algorithm design"
+readme = "README.md"
+requires-python = ">=3.9,<3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [
+  { name = "Qi Zhao" },
+  { name = "Tengfei Liu" },
+  { name = "Bai Yan" },
+  { name = "Qiqi Duan" },
+  { name = "Jian Yang" },
+  { name = "Yuhui Shi" },
+]
+dependencies = [
+  "autooptlib[aldes] @ git+https://github.com/auto4opt/AutoOptLib.git@v1.3.0",
+  "numpy>=1.23,<3",
+  "scipy>=1.9,<2",
+]
+
+[project.optional-dependencies]
+test = [
+  "build>=1.2,<2",
+  "pytest>=8,<9",
+  "ruff>=0.9,<1",
+  "twine>=5,<7",
+]
+plot = [
+  "jupyter>=1,<2",
+  "matplotlib>=3.7,<4",
+  "seaborn>=0.12,<1",
+]
+
+[project.scripts]
+aldes-train = "train:main"
+aldes-paper-subset = "run_paper_subset:main"
+
+[project.urls]
+Paper = "https://doi.org/10.1109/TEVC.2024.3464677"
+Repository = "https://github.com/auto4opt/ALDes"
+Issues = "https://github.com/auto4opt/ALDes/issues"
+
+[tool.setuptools]
+py-modules = [
+  "EWC",
+  "aldes_setting",
+  "conf",
+  "pflacco_feature",
+  "run_paper_subset",
+  "train",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["draw*", "models*", "util*"]
+
+[tool.setuptools.package-data]
+"draw.datas.reference_results" = ["**/*.csv", "**/*.mat", "**/*.pkl", "**/*.xlsx"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py39"
+extend-exclude = ["draw/*.ipynb"]

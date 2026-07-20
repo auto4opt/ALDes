@@ -1,106 +1,129 @@
-import re
-from collections import defaultdict
-import os
-from datetime import datetime
-import pickle
-import matplotlib.pyplot as plt
+"""Shared data-loading and plotting helpers for the paper notebooks."""
+
+from __future__ import annotations
+
 import copy
+import pickle
+import re
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+
 
 def read_data(filename):
-    pattern = re.compile(r'\d+\.\d+|\d+')
-    keyword1 = 'total env-steps'
-    keyword2 = 'return mean'
-    total_step =[]
-    mean_var =[]
-    with open(filename, 'r', encoding='utf-8') as file:
-        for line in file:
-            if keyword1 in line:
-                numbers = pattern.findall(line)
-                total_step.append(int(numbers[-1]))
-            if keyword2 in line:
-                numbers = pattern.findall(line)
-                numbers = [float(num) for num in numbers]
-                mean_var.append(numbers)
+    pattern = re.compile(r"\d+\.\d+|\d+")
+    total_steps = []
+    mean_variance = []
+    with Path(filename).open("r", encoding="utf-8") as stream:
+        for line in stream:
+            if "total env-steps" in line:
+                total_steps.append(int(pattern.findall(line)[-1]))
+            if "return mean" in line:
+                mean_variance.append(
+                    [float(number) for number in pattern.findall(line)]
+                )
 
-    return_means = [d[-2] for d in mean_var]
-    return_stds = [d[-1] for d in mean_var]
-    return total_step,return_means,return_stds
+    means = [values[-2] for values in mean_variance]
+    variances = [values[-1] for values in mean_variance]
+    return total_steps, means, variances
 
 
 def read_data_for_transformer(filename):
-    pattern =  re.compile(r'-?\d+\.\d+|-?\d+')
-    keyword = 'step :'
-    total_step =[]
-    data =[]
-    with open(filename, 'r', encoding='utf-8') as file:
-        for line in file:
-            if keyword in line:
-                line = line.split('step :')[1].split('Training')[0]
-                numbers = pattern.findall(line)
-                numbers = [float(num) for num in numbers]
-                data.append(numbers)
-
+    pattern = re.compile(r"-?\d+\.\d+|-?\d+")
+    data = []
+    with Path(filename).open("r", encoding="utf-8") as stream:
+        for line in stream:
+            if "step :" not in line:
+                continue
+            segment = line.split("step :", maxsplit=1)[1].split("Training", maxsplit=1)[
+                0
+            ]
+            data.append([float(number) for number in pattern.findall(segment)])
     return data
 
-def plot_each(plt,steps,means,stds,label,show_stds = False):
-    plt.plot(steps, means, label=label,linewidth=2)
+
+def plot_each(plotter, steps, means, deviations, label, show_stds=False):
+    plotter.plot(steps, means, label=label, linewidth=2)
     if show_stds:
-        plt.fill_between(steps,
-                         [m - s for m, s in zip(means, stds)],
-                         [m + s for m, s in zip(means, stds)],
-                          alpha=0.2)
-        
-def read_from_pkl(pkls):
-    datas = []
-    for pkl in pkls:
-        with open(pkl, 'rb') as f:
-            loaded_data = pickle.load(f)
-            datas.append(loaded_data)
-    print(len(datas))
-    return datas
+        plotter.fill_between(
+            steps,
+            [mean - deviation for mean, deviation in zip(means, deviations)],
+            [mean + deviation for mean, deviation in zip(means, deviations)],
+            alpha=0.2,
+        )
 
-def roll_and_draw(df,problem_set,save_path):
-    
-    if not os.path.exists(save_path):
-        os.makedirs(save_path)
 
-    _new_df = copy.deepcopy(df)
-    new_df = _new_df.rolling(window=5, center=False).mean() 
-    show_std = True
+def read_from_pkl(paths):
+    data = []
+    for path in paths:
+        with Path(path).open("rb") as stream:
+            data.append(pickle.load(stream))
+    return data
+
+
+def _prepare_output(save_path):
+    output = Path(save_path)
+    output.mkdir(parents=True, exist_ok=True)
+    return output
+
+
+def roll_and_draw(frame, problem_set, save_path):
+    output = _prepare_output(save_path)
+    smoothed = copy.deepcopy(frame).rolling(window=5, center=False).mean()
     for problem in problem_set:
         plt.figure(figsize=(5, 3))
-        plot_each(plt, new_df['Epoch'], new_df[f'Means_{problem}'], new_df[f'Vars_{problem}'], f'problem{problem}',show_stds=show_std)
-        plt.title(f'F{problem}')
-        plt.xlabel('Episode')
-        plt.ylabel('Performance')
-        if show_std:
-            plt.savefig(f'{save_path}\F{problem}.svg',dpi=300,format="svg",bbox_inches = 'tight')
-        else:
-            plt.savefig(f'{save_path}\F{problem}.svg',dpi=300,format="svg",bbox_inches = 'tight')
+        plot_each(
+            plt,
+            smoothed["Epoch"],
+            smoothed[f"Means_{problem}"],
+            smoothed[f"Vars_{problem}"],
+            f"problem{problem}",
+            show_stds=True,
+        )
+        plt.title(f"F{problem}")
+        plt.xlabel("Episode")
+        plt.ylabel("Performance")
+        plt.savefig(
+            output / f"F{problem}.svg",
+            dpi=300,
+            format="svg",
+            bbox_inches="tight",
+        )
 
-def roll_and_draw_mutil(dfs,problem_set,display_name,save_path):
-    
-    if not os.path.exists(save_path):
-        os.makedirs(save_path)
 
-    new_dfs = []
-    for df in dfs:
-        _new_df = copy.deepcopy(df)
-        new_df = _new_df.rolling(window=5, center=False).mean() 
-        new_dfs.append(new_df)
-        
-    show_std = True
+def roll_and_draw_multiple(frames, problem_set, display_names, save_path):
+    output = _prepare_output(save_path)
+    smoothed_frames = [
+        copy.deepcopy(frame).rolling(window=5, center=False).mean() for frame in frames
+    ]
     for problem in problem_set:
         plt.figure(figsize=(5, 3))
-        for new_df,_display_name in zip(new_dfs,display_name):
-            plot_each(plt, new_df['Epoch'], new_df[f'Means_{problem}'], new_df[f'Vars_{problem}'], _display_name, show_stds=show_std)
-        plt.title(f'F{problem}')
-        plt.xlabel('Episode')
-        plt.ylabel('Performance')
+        for frame, display_name in zip(smoothed_frames, display_names):
+            plot_each(
+                plt,
+                frame["Epoch"],
+                frame[f"Means_{problem}"],
+                frame[f"Vars_{problem}"],
+                display_name,
+                show_stds=True,
+            )
+        plt.title(f"F{problem}")
+        plt.xlabel("Episode")
+        plt.ylabel("Performance")
         plt.legend()
-        path = f'{save_path}F{problem}.svg'
-        print(path)
-        if show_std:
-            plt.savefig(f'{save_path}F{problem}.svg',dpi=300,format="svg",bbox_inches = 'tight')
-        else:
-            plt.savefig(f'{save_path}F{problem}.svg',dpi=300,format="svg",bbox_inches = 'tight')
+        plt.savefig(
+            output / f"F{problem}.svg",
+            dpi=300,
+            format="svg",
+            bbox_inches="tight",
+        )
+
+
+__all__ = [
+    "plot_each",
+    "read_data",
+    "read_data_for_transformer",
+    "read_from_pkl",
+    "roll_and_draw",
+    "roll_and_draw_multiple",
+]

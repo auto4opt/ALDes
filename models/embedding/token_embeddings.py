@@ -3,6 +3,7 @@
 @when : 2019-10-24
 @homepage : https://github.com/gusdnd852
 """
+
 from torch import nn
 
 
@@ -19,4 +20,6 @@ class TokenEmbedding(nn.Embedding):
         :param vocab_size: size of vocabulary
         :param d_model: dimensions of model
         """
-        super(TokenEmbedding, self).__init__(vocab_size, d_model, padding_idx=1)
+        # ALDes has no padding token. Index 1 is choose_tournament and must
+        # receive gradients like every other vocabulary entry.
+        super(TokenEmbedding, self).__init__(vocab_size, d_model)

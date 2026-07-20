@@ -1,56 +1,52 @@
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.distributions.normal import Normal
-from datetime import datetime
-import os
-import numpy as np
+from __future__ import annotations
+
 import pickle
+from datetime import datetime
+from pathlib import Path
+from typing import Any
 
-def _get_action(model_output):
-    # 偶数列
-    mean = model_output[:, 1::2]
-    # 奇数列
-    sdv = model_output[:, 0::2]
-    # here use exp make sure its positive
-    sdv = torch.exp(sdv)
+import numpy as np
+import torch
 
-    probs = Normal(mean, sdv)
-    action = probs.sample()
-    action = torch.sigmoid(action)
-    return action, probs.log_prob(action).sum(1), probs.entropy().sum(1)
 
-def seed_torch(seed=2): #1029
-	np.random.seed(seed)
-	torch.manual_seed(seed)
-	torch.cuda.manual_seed(seed)
-	torch.cuda.manual_seed_all(seed) # if you are using multi-GPU.
-	torch.backends.cudnn.benchmark = False
-	torch.backends.cudnn.deterministic = True
-     
-class my_log():
-    def __init__(self):
-        now = datetime.now()  # 获得当前时间
-        global_timestr = now.strftime("%m_%d_%H_%M")
-        self.log_dir = f'logs/{global_timestr}/'
-        os.makedirs(self.log_dir)
-        self.log_file = self.log_dir + 'log.txt'
-        
+def seed_torch(seed: int = 2) -> None:
+    """Seed the random-number generators used by ALDes."""
+
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
+    mps = getattr(torch, "mps", None)
+    if mps is not None and torch.backends.mps.is_available():
+        mps.manual_seed(seed)
+
+
+class RunLogger:
+    """Write human-readable logs and raw PPO histories for one process."""
+
+    def __init__(self, root: str | Path = "logs") -> None:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        self.log_dir = Path(root) / timestamp
+        self.log_file = self.log_dir / "log.txt"
         self.problem_id = -1
         self.seed = -1
 
-    
-    def write_log(self,info):
-        f = open(self.log_file, 'a')
-        now = datetime.now()  # 获得当前时间
-        timestr = now.strftime("%m_%d_%H_%M")
-        f.write('\n' + timestr + ":"+info)
-        f.close()
+    def write_log(self, info: Any) -> None:
+        self.log_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().isoformat(timespec="seconds")
+        with self.log_file.open("a", encoding="utf-8") as stream:
+            stream.write(f"\n{timestamp}: {info}")
 
-    def dump_log(self,experience):
-        dump_file = self.log_dir + f'seed{self.seed}_problem{self.problem_id}_.pkl'
-        with open(dump_file, 'wb') as f:
-            # 使用pickle.dump()将字典对象序列化并保存到文件中
-            pickle.dump(experience, f)
-         
+    def dump_log(self, experience: Any) -> None:
+        self.log_dir.mkdir(parents=True, exist_ok=True)
+        dump_file = self.log_dir / (
+            f"seed{self.seed}_problem{self.problem_id}_training.pkl"
+        )
+        with dump_file.open("wb") as stream:
+            pickle.dump(experience, stream)
 
+
+__all__ = ["RunLogger", "seed_torch"]
