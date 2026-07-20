@@ -6,7 +6,7 @@ Autoregressive Learning** (ALDes).
 ALDes treats algorithm design as constrained autoregressive sequence generation.
 A Transformer policy generates a variable-length metaheuristic program, PPO
 learns from the program's performance, and AutoOptLib executes the generated
-algorithm without MATLAB or MATLAB Engine.
+algorithm.
 
 ## Release scope
 
@@ -19,8 +19,7 @@ This release supports the paper's 23 pseudo-Boolean optimization (PBO) tasks:
 - parallel CPU evaluation of generated algorithms.
 
 The paper's RIS beamforming and power-system restoration experiments are not
-part of this release. The repository therefore makes no claim that those two
-application results can be reproduced here.
+part of this release. 
 
 ## Installation
 
@@ -187,10 +186,15 @@ replay, EWC accumulation, and a pure-Python PPO update.
 
 If you use ALDes, cite:
 
-> Q. Zhao, T. Liu, B. Yan, Q. Duan, J. Yang, and Y. Shi, "Automated
-> Metaheuristic Algorithm Design with Autoregressive Learning," IEEE
-> Transactions on Evolutionary Computation, 2024.
-> https://doi.org/10.1109/TEVC.2024.3464677
+> @article{zhao2025automated,
+  title   = {Automated Metaheuristic Algorithm Design With Autoregressive Learning},
+  author  = {Zhao, Qi and Liu, Tengfei and Yan, Bai and Duan, Qiqi and Yang, Jian and Shi, Yuhui},
+  journal = {IEEE Transactions on Evolutionary Computation},
+  year    = {2025},
+  volume  = {29},
+  number  = {5},
+  pages   = {2004--2018},
+  doi     = {10.1109/TEVC.2024.3464677}}
 
 ## License
 
