@@ -186,15 +186,17 @@ replay, EWC accumulation, and a pure-Python PPO update.
 
 If you use ALDes, cite:
 
->  @article{zhao2025automated,
->  title   = {Automated Metaheuristic Algorithm Design With Autoregressive Learning},
->  author  = {Zhao, Qi and Liu, Tengfei and Yan, Bai and Duan, Qiqi and Yang, Jian and Shi, Yuhui},
->  journal = {IEEE Transactions on Evolutionary Computation},
->  year    = {2025},
->  volume  = {29},
->  number  = {5},
->  pages   = {2004--2018},
->  doi     = {10.1109/TEVC.2024.3464677}}
+```bash
+@article{zhao2025automated,
+title   = {Automated Metaheuristic Algorithm Design With Autoregressive Learning},
+author  = {Zhao, Qi and Liu, Tengfei and Yan, Bai and Duan, Qiqi and Yang, Jian and Shi, Yuhui},
+journal = {IEEE Transactions on Evolutionary Computation},
+year    = {2025},
+volume  = {29},
+number  = {5},
+pages   = {2004--2018},
+doi     = {10.1109/TEVC.2024.3464677}}
+```
 
 ## License
 
