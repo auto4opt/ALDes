@@ -24,7 +24,13 @@ application results can be reproduced here.
 
 ## Installation
 
-Python 3.9--3.11 is supported. Clone only this repository and install it from
+Python 3.9--3.11 is supported. Install the released package from PyPI:
+
+```bash
+python -m pip install aldes
+```
+
+For an editable source installation, clone this repository and install it from
 the repository root:
 
 ```bash
@@ -34,7 +40,7 @@ python -m pip install -e .
 ```
 
 The installation automatically downloads the compatible
-`autooptlib[aldes]` dependency from the official AutoOptLib GitHub release.
+`autooptlib[aldes]` dependency from PyPI.
 Users do not need to clone AutoOptLib separately. The Python import name is
 lowercase:
 
