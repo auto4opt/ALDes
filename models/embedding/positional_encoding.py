@@ -18,8 +18,7 @@ class PositionalEncoding(nn.Module):
         super(PositionalEncoding, self).__init__()
 
         # same size with input matrix (for adding with input matrix)
-        self.encoding = torch.zeros(max_len, d_model, device=device)
-        self.encoding.requires_grad = False  # we don't need to compute gradient
+        encoding = torch.zeros(max_len, d_model, device=device)
 
         pos = torch.arange(0, max_len, device=device)
         pos = pos.float().unsqueeze(dim=1)
@@ -29,8 +28,9 @@ class PositionalEncoding(nn.Module):
         # 'i' means index of d_model (e.g. embedding size = 50, 'i' = [0,50])
         # "step=2" means 'i' multiplied with two (same with 2 * i)
 
-        self.encoding[:, 0::2] = torch.sin(pos / (10000 ** (_2i / d_model)))
-        self.encoding[:, 1::2] = torch.cos(pos / (10000 ** (_2i / d_model)))
+        encoding[:, 0::2] = torch.sin(pos / (10000 ** (_2i / d_model)))
+        encoding[:, 1::2] = torch.cos(pos / (10000 ** (_2i / d_model)))
+        self.register_buffer("encoding", encoding, persistent=False)
         # compute positional encoding to consider positional information of words
 
     def forward(self, x):
