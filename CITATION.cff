@@ -2,8 +2,8 @@ cff-version: 1.2.0
 message: "If you use ALDes, please cite the paper below."
 title: "ALDes: Automated Metaheuristic Algorithm Design with Autoregressive Learning"
 type: software
-version: 2.0.0
-date-released: 2026-07-20
+version: 2.0.1
+date-released: 2026-09-02
 repository-code: "https://github.com/auto4opt/ALDes"
 license: Apache-2.0
 authors:
@@ -22,9 +22,13 @@ authors:
 preferred-citation:
   type: article
   title: "Automated Metaheuristic Algorithm Design with Autoregressive Learning"
-  year: 2024
+  year: 2025
   doi: "10.1109/TEVC.2024.3464677"
   journal: "IEEE Transactions on Evolutionary Computation"
+  volume: 29
+  issue: 5
+  start: 2004
+  end: 2018
   authors:
     - family-names: Zhao
       given-names: Qi

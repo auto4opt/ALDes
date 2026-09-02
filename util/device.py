@@ -38,6 +38,13 @@ def resolve_device(requested: str | torch.device = "auto") -> torch.device:
             "CUDA/ROCm was requested, but this PyTorch installation cannot "
             "access a compatible GPU."
         )
+    if device.type == "cuda" and device.index is not None:
+        count = torch.cuda.device_count()
+        if device.index >= count:
+            raise RuntimeError(
+                f"CUDA/ROCm device index {device.index} was requested, but only "
+                f"{count} device(s) are available."
+            )
     if device.type == "mps" and not _mps_available():
         raise RuntimeError(
             "MPS was requested, but this PyTorch installation or Mac does "

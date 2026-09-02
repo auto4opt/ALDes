@@ -28,18 +28,22 @@ class PositionalEncoding(nn.Module):
         # 'i' means index of d_model (e.g. embedding size = 50, 'i' = [0,50])
         # "step=2" means 'i' multiplied with two (same with 2 * i)
 
-        encoding[:, 0::2] = torch.sin(pos / (10000 ** (_2i / d_model)))
-        encoding[:, 1::2] = torch.cos(pos / (10000 ** (_2i / d_model)))
+        scale = 10000 ** (_2i / d_model)
+        encoding[:, 0::2] = torch.sin(pos / scale)
+        encoding[:, 1::2] = torch.cos(pos / scale[: d_model // 2])
         self.register_buffer("encoding", encoding, persistent=False)
         # compute positional encoding to consider positional information of words
 
-    def forward(self, x):
+    def forward(self, x, offset=0):
         # self.encoding
         # [max_len = 512, d_model = 512]
 
-        batch_size, seq_len = x.size()
+        seq_len = x.size(1)
         # [batch_size = 128, seq_len = 30]
 
-        return self.encoding[:seq_len, :]
+        end = int(offset) + seq_len
+        if offset < 0 or end > self.encoding.shape[0]:
+            raise ValueError("Requested positions exceed the configured max_len.")
+        return self.encoding[offset:end, :]
         # [seq_len = 30, d_model = 512]
         # it will add with tok_emb : [128, 30, 512]

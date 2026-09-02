@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.9", "3.11"]
+        python-version: ["3.9", "3.10", "3.11"]
 
     steps:
       - uses: actions/checkout@v7
@@ -63,7 +63,7 @@ jobs:
           import importlib.metadata
           from run_paper_subset import DEFAULT_REFERENCE_DIR, _reference_result
 
-          assert importlib.metadata.version("aldes") == "2.0.0"
+          assert importlib.metadata.version("aldes") == "2.0.1"
           assert DEFAULT_REFERENCE_DIR.is_dir()
           assert _reference_result(DEFAULT_REFERENCE_DIR, 1).size == 30
           PY

@@ -6,6 +6,10 @@ from models.layers.scale_dot_product_attention import ScaleDotProductAttention
 class MultiHeadAttention(nn.Module):
     def __init__(self, d_model, n_head):
         super(MultiHeadAttention, self).__init__()
+        if d_model <= 0 or n_head <= 0:
+            raise ValueError("d_model and n_head must be positive.")
+        if d_model % n_head:
+            raise ValueError("d_model must be divisible by n_head.")
         self.n_head = n_head
         self.attention = ScaleDotProductAttention()
         self.w_q = nn.Linear(d_model, d_model)
@@ -21,14 +25,11 @@ class MultiHeadAttention(nn.Module):
         q, k, v = self.split(q), self.split(k), self.split(v)
 
         # 3. do scale dot product to compute similarity
-        out, attention = self.attention(q, k, v, mask=mask)
+        out, _ = self.attention(q, k, v, mask=mask)
 
         # 4. concat and pass to linear layer
         out = self.concat(out)
         out = self.w_concat(out)
-
-        # 5. visualize attention map
-        # TODO : we should implement visualization
 
         return out
 

@@ -33,7 +33,7 @@ For an editable source installation, clone this repository and install it from
 the repository root:
 
 ```bash
-git clone --branch v2.0.0 --depth 1 https://github.com/auto4opt/ALDes.git
+git clone --depth 1 https://github.com/auto4opt/ALDes.git
 cd ALDes
 python -m pip install -e .
 ```
@@ -88,7 +88,9 @@ aldes-train --problems 14 --seeds 1 --evaluate-test
 ```
 
 `--evaluate-test` applies the paper's full 30-run test protocol after training.
-Without it, only training and final algorithm inference are performed.
+Without it, only training and final algorithm inference are performed. In
+continual mode, the flag evaluates all problems seen so far after every stage,
+which produces the forgetting matrix used by the paper.
 
 ## Continual design
 
@@ -108,6 +110,30 @@ aldes-train --mode continual --checkpoint-dir logs/continual
 ```
 
 No checkpoint binary is distributed with this repository.
+
+The two default continual problem sets in `conf.py` are independent paper
+tasks. They are trained from separate initial models rather than concatenated
+into one sequence. When `--problems` is supplied, that explicit list is one
+continual task. Landscape vectors are standardized once over the complete
+declared task so a previously seen problem keeps the same model input at every
+stage. The sampled 100/225/400-dimensional populations are reused only during
+training; the 625-dimensional test always starts from fresh populations.
+PBO nearest-better and dispersion features explicitly use maximization
+semantics and Hamming distance. The 32-column schema follows Table A3 of the
+paper appendix; its three machine-dependent runtime slots are fixed to zero so
+seeded artifacts remain reproducible. Pairwise statistics are computed in
+blocks instead of allocating a square distance matrix, and the costly feature
+regressions are calculated on the 100-dimensional training instance only;
+sampled populations for all three training dimensions are still retained.
+
+Automatic artifact generation uses the paper appendix's random-walk length of
+`100 * dimension`. Feature extraction is consequently a long preprocessing
+job. A factor of 10 can be requested explicitly for development smoke tests,
+but artifacts generated that way are not paper-protocol inputs:
+
+```bash
+python pflacco_feature.py --sample-factor 10
+```
 
 ## Compute devices
 
@@ -168,6 +194,17 @@ ignored by Git.
 Historical comparison data used by the plotting notebooks are stored under
 `draw/datas/reference_results` and can be read with SciPy.
 
+The notebooks are source artifacts and should be opened from the repository
+root after installing the plotting extra:
+
+```bash
+python -m pip install -e ".[plot]"
+jupyter lab draw
+```
+
+Their historical `.pkl` inputs are trusted research artifacts committed to
+this repository. Do not pass untrusted pickle files to the plotting helpers.
+
 ## Tests
 
 Run the test suite and static checks with:
@@ -177,8 +214,8 @@ python -m pytest -q
 python -m ruff check .
 ```
 
-GitHub Actions repeats installation, linting, and tests on Linux with Python
-3.9 and 3.11. Tests cover device selection, serial/parallel evaluation parity,
+GitHub Actions repeats installation, linting, and tests on Linux with every
+supported Python minor version (3.9--3.11). Tests cover device selection,
 single and continual feature modes, grammar-valid generation, PPO likelihood
 replay, EWC accumulation, and a pure-Python PPO update.
 

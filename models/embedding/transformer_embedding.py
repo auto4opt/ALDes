@@ -22,8 +22,8 @@ class TransformerEmbedding(nn.Module):
         self.pos_emb = PositionalEncoding(d_model, max_len, device)
         self.drop_out = nn.Dropout(p=drop_prob)
 
-    def forward(self, x):
+    def forward(self, x, position_offset=0):
         tok_emb = self.tok_emb(x)
-        pos_emb = self.pos_emb(x)
+        pos_emb = self.pos_emb(x, offset=position_offset)
 
         return self.drop_out(tok_emb + pos_emb)

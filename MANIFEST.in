@@ -1,0 +1,6 @@
+include CHANGELOG.md
+include CITATION.cff
+recursive-include draw *.ipynb
+recursive-include draw/datas/mats *.mat
+recursive-include draw/datas/pkls *.pkl
+recursive-include draw/datas/txts *.txt

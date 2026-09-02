@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aldes"
-version = "2.0.0"
+version = "2.0.1"
 description = "Pure-Python ALDes for automated metaheuristic algorithm design"
 readme = "README.md"
 requires-python = ">=3.9,<3.12"
@@ -19,7 +19,7 @@ authors = [
   { name = "Yuhui Shi" },
 ]
 dependencies = [
-  "autooptlib[aldes]>=1.3,<2",
+  "autooptlib[aldes]>=1.3,<1.4",
   "numpy>=1.23,<3",
   "scipy>=1.9,<2",
 ]

@@ -12,6 +12,9 @@ import torch
 def seed_torch(seed: int = 2) -> None:
     """Seed the random-number generators used by ALDes."""
 
+    seed = int(seed)
+    if seed < 0 or seed > np.iinfo(np.uint32).max:
+        raise ValueError("Seed must be in NumPy's supported range 0..2**32-1.")
     np.random.seed(seed)
     torch.manual_seed(seed)
     if torch.cuda.is_available():
@@ -33,6 +36,7 @@ class RunLogger:
         self.log_file = self.log_dir / "log.txt"
         self.problem_id = -1
         self.seed = -1
+        self.task_id = None
 
     def write_log(self, info: Any) -> None:
         self.log_dir.mkdir(parents=True, exist_ok=True)
@@ -42,11 +46,14 @@ class RunLogger:
 
     def dump_log(self, experience: Any) -> None:
         self.log_dir.mkdir(parents=True, exist_ok=True)
+        task_prefix = f"task{self.task_id}_" if self.task_id is not None else ""
         dump_file = self.log_dir / (
-            f"seed{self.seed}_problem{self.problem_id}_training.pkl"
+            f"{task_prefix}seed{self.seed}_problem{self.problem_id}_training.pkl"
         )
-        with dump_file.open("wb") as stream:
+        temporary = dump_file.with_suffix(dump_file.suffix + ".tmp")
+        with temporary.open("wb") as stream:
             pickle.dump(experience, stream)
+        temporary.replace(dump_file)
 
 
 __all__ = ["RunLogger", "seed_torch"]

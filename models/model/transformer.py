@@ -19,7 +19,6 @@ class Transformer(nn.Module):
         condition_on_features=False,
     ):
         super().__init__()
-        self.device = device
         self.decoder = Decoder(
             d_model=d_model,
             n_head=n_head,

@@ -12,6 +12,6 @@ class PositionwiseFeedForward(nn.Module):
     def forward(self, x):
         x = self.linear1(x)
         x = self.relu(x)
-        # x = self.dropout(x)
+        x = self.dropout(x)
         x = self.linear2(x)
         return x

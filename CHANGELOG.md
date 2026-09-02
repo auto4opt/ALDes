@@ -2,6 +2,44 @@
 
 All notable changes to ALDes are documented here.
 
+## 2.0.1 - 2026-09-02
+
+### Fixed
+
+- Kept continual-task feature embeddings fixed across stages instead of
+  repeatedly rescaling and changing all previously seen problem vectors.
+- Run the paper's two default continual tasks from separate initial policies
+  and made the expensive stage-by-stage test protocol explicitly opt-in.
+- Prevented 100/225/400-dimensional training populations from being supplied
+  to the 625-dimensional test instance.
+- Implemented the empirical diagonal Fisher as the mean of per-algorithm
+  squared score gradients and restored the `lambda / 2` EWC coefficient from
+  the paper.
+- Kept the final annealed PPO update at a non-zero learning rate and made
+  independent `(problem, seed)` trials invariant to CLI problem order.
+- Isolated training and test random streams so enabling the continual
+  forgetting-matrix evaluation cannot change later policy updates.
+- Matched continual conditioning to the paper's prepended feature-token
+  architecture, restored causal attention behavior, and added clear
+  validation for invalid model and replay inputs.
+- Validated feature and initial-population artifacts, preserved failed
+  experiment status, wrote histories/checkpoints atomically, recorded
+  dependency versions, and corrected scientific notation and signed-number
+  parsing in plotting helpers.
+- Corrected PBO maximization direction, Hamming nearest-better semantics, and
+  the exact Table A3 factor schema for continual landscape features. The
+  paper's `100 * dimension` sampling factor is the default, including for
+  information-content distances. Pairwise statistics are blockwise and
+  high-dimensional walks retain only sampled populations, avoiding quadratic
+  distance matrices and infeasible repeated feature regressions.
+- Restricted the AutoOptLib dependency to the audited 1.3 feature/protocol
+  series so a future minor release cannot silently change experiment
+  semantics.
+- Included citation metadata, the changelog, plotting notebooks, and their
+  historical input artifacts in source distributions used for reproducibility.
+- Required the release workflow to pass linting and tests before publishing,
+  and covered every advertised Python minor version in CI.
+
 ## 2.0.0 - 2026-07-20
 
 ### Added

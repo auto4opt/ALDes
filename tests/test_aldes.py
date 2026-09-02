@@ -3,16 +3,16 @@ from __future__ import annotations
 import numpy as np
 import pytest
 import torch
-
-import conf
-import run_paper_subset
-import train as training_script
-from EWC import EWC
 from autooptlib.aldes import EvaluationConfig, validate_sequence
 from autooptlib.aldes.evaluator import (
     _evaluate_pbo_sequences,
     _resolve_evaluation_workers,
 )
+
+import conf
+import run_paper_subset
+import train as training_script
+from EWC import EWC
 from models.model.transformer import Transformer
 from util import device as device_module
 
@@ -92,6 +92,15 @@ def test_unavailable_explicit_accelerator_fails_clearly(monkeypatch):
         device_module.resolve_device("cuda")
     with pytest.raises(RuntimeError, match="does not provide"):
         device_module.resolve_device("mps")
+
+
+def test_invalid_cuda_device_index_fails_before_model_creation(monkeypatch):
+    monkeypatch.setattr(device_module.torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(device_module.torch.cuda, "device_count", lambda: 2)
+
+    assert device_module.resolve_device("cuda:1") == torch.device("cuda:1")
+    with pytest.raises(RuntimeError, match="only 2 device"):
+        device_module.resolve_device("cuda:2")
 
 
 def test_cpu_evaluation_worker_selection(monkeypatch):
