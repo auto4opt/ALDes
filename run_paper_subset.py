@@ -196,7 +196,7 @@ def main(argv: list[str] | None = None) -> None:
     for problem_id in args.problems:
         _reference_result(args.reference_dir, problem_id)
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    timestamp = datetime.now().astimezone().strftime("%Y%m%d_%H%M%S_%f")
     output_dir = args.output_dir or Path("experiments") / f"paper_subset_{timestamp}"
     output_dir.mkdir(parents=True, exist_ok=False)
     reference_dir = args.reference_dir

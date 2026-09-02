@@ -28,7 +28,7 @@ dependencies = [
 test = [
   "build>=1.2,<2",
   "pytest>=8,<9",
-  "ruff>=0.9,<1",
+  "ruff>=0.16.5,<0.17",
   "twine>=5,<7",
 ]
 plot = [

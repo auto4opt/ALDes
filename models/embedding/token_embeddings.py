@@ -22,4 +22,4 @@ class TokenEmbedding(nn.Embedding):
         """
         # ALDes has no padding token. Index 1 is choose_tournament and must
         # receive gradients like every other vocabulary entry.
-        super(TokenEmbedding, self).__init__(vocab_size, d_model)
+        super().__init__(vocab_size, d_model)

@@ -31,7 +31,7 @@ class RunLogger:
     """Write human-readable logs and raw PPO histories for one process."""
 
     def __init__(self, root: str | Path = "logs") -> None:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        timestamp = datetime.now().astimezone().strftime("%Y%m%d_%H%M%S_%f")
         self.log_dir = Path(root) / timestamp
         self.log_file = self.log_dir / "log.txt"
         self.problem_id = -1
@@ -40,7 +40,7 @@ class RunLogger:
 
     def write_log(self, info: Any) -> None:
         self.log_dir.mkdir(parents=True, exist_ok=True)
-        timestamp = datetime.now().isoformat(timespec="seconds")
+        timestamp = datetime.now().astimezone().isoformat(timespec="seconds")
         with self.log_file.open("a", encoding="utf-8") as stream:
             stream.write(f"\n{timestamp}: {info}")
 

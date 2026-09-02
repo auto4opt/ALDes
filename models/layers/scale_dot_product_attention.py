@@ -13,7 +13,7 @@ class ScaleDotProductAttention(nn.Module):
     """Compute scaled dot-product attention."""
 
     def __init__(self):
-        super(ScaleDotProductAttention, self).__init__()
+        super().__init__()
         self.softmax = nn.Softmax(dim=-1)
 
     def forward(self, q, k, v, mask=None):

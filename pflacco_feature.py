@@ -5,8 +5,8 @@ from __future__ import annotations
 import argparse
 import json
 import warnings
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 import numpy as np
 import pandas as pd
@@ -87,7 +87,7 @@ def _validate_artifact_metadata(
     kind: str,
 ) -> dict[str, object]:
     if not isinstance(metadata, dict):
-        raise ValueError("ALDes landscape artifact metadata must be a JSON object.")
+        raise TypeError("ALDes landscape artifact metadata must be a JSON object.")
     expected = {
         "schema_version": ELA_SCHEMA_VERSION,
         "problem_id": int(problem_id),

@@ -5,7 +5,7 @@ from models.layers.scale_dot_product_attention import ScaleDotProductAttention
 
 class MultiHeadAttention(nn.Module):
     def __init__(self, d_model, n_head):
-        super(MultiHeadAttention, self).__init__()
+        super().__init__()
         if d_model <= 0 or n_head <= 0:
             raise ValueError("d_model and n_head must be positive.")
         if d_model % n_head:

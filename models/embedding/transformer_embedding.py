@@ -17,7 +17,7 @@ class TransformerEmbedding(nn.Module):
         :param vocab_size: size of vocabulary
         :param d_model: dimensions of model
         """
-        super(TransformerEmbedding, self).__init__()
+        super().__init__()
         self.tok_emb = TokenEmbedding(vocab_size, d_model)
         self.pos_emb = PositionalEncoding(d_model, max_len, device)
         self.drop_out = nn.Dropout(p=drop_prob)

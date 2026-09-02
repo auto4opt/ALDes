@@ -149,7 +149,6 @@ def PPO(
     if not 0 < clip_coef < 1:
         raise ValueError("PPO clip coefficient must be between zero and one.")
     ewc_loss = None
-    global EWC_
     log_performances = []
     # ppo
     for i in range(total_epoch):
@@ -229,6 +228,9 @@ def PPO(
             )
 
         time_elapsed = time.time() - since
+        elapsed_message = (
+            f",Training complete in {time_elapsed // 60:.0f}m {time_elapsed % 60:.0f}s"
+        )
 
         print(
             "step :",
@@ -239,9 +241,7 @@ def PPO(
             cost.mean().item(),
             ", baseline :",
             baseline.item(),
-            ",Training complete in {:.0f}m {:.0f}s".format(
-                time_elapsed // 60, time_elapsed % 60
-            ),
+            elapsed_message,
         )
         logs.write_log(
             (
@@ -253,9 +253,7 @@ def PPO(
                 cost.mean().item(),
                 ", baseline :",
                 baseline.item(),
-                ",Training complete in {:.0f}m {:.0f}s".format(
-                    time_elapsed // 60, time_elapsed % 60
-                ),
+                elapsed_message,
             ).__str__()
         )
 

@@ -7,7 +7,7 @@ from models.layers.position_wise_feed_forward import PositionwiseFeedForward
 
 class DecoderLayer(nn.Module):
     def __init__(self, d_model, ffn_hidden, n_head, drop_prob):
-        super(DecoderLayer, self).__init__()
+        super().__init__()
         self.self_attention = MultiHeadAttention(d_model=d_model, n_head=n_head)
         self.norm1 = LayerNorm(d_model=d_model)
         self.dropout1 = nn.Dropout(p=drop_prob)

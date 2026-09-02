@@ -15,7 +15,7 @@ class PositionalEncoding(nn.Module):
         :param max_len: max sequence length
         :param device: hardware device setting
         """
-        super(PositionalEncoding, self).__init__()
+        super().__init__()
 
         # same size with input matrix (for adding with input matrix)
         encoding = torch.zeros(max_len, d_model, device=device)

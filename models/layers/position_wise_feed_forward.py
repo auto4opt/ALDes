@@ -3,7 +3,7 @@ from torch import nn
 
 class PositionwiseFeedForward(nn.Module):
     def __init__(self, d_model, hidden, drop_prob=0.1):
-        super(PositionwiseFeedForward, self).__init__()
+        super().__init__()
         self.linear1 = nn.Linear(d_model, hidden)
         self.linear2 = nn.Linear(hidden, d_model)
         self.relu = nn.ReLU()
