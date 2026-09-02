@@ -4,6 +4,12 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      publish_to_pypi:
+        description: Publish the built distributions to PyPI
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -37,7 +43,9 @@ jobs:
         run: gh release upload "${{ github.event.release.tag_name }}" dist/* --clobber
 
   publish:
-    if: github.event_name == 'release'
+    # Publishing a GitHub Release only builds and attaches distributions.
+    # PyPI requires a separate, explicit manual dispatch with this opt-in.
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_to_pypi == true
     needs: build
     runs-on: ubuntu-latest
     environment:
